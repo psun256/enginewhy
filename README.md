@@ -7,7 +7,8 @@ Production't graden't load balancer.
 - [ ] architecture astronauting
 - [ ] stream / session handling (i think wrapper around tokio TcpStream)
 - [ ] basic backend pooling
-- [ ] layer 4 load balancing
+- [ ] layer 4 load balancing 
+- [ ] load balancing algorithm from the paper (https://www.wcse.org/WCSE_2018/W110.pdf) 
 
 ## notes
 tcp, for nginx (and haproxy, its similar):
@@ -20,7 +21,7 @@ struct ngx_connection_s {
 
     ngx_socket_t        fd;
 
-    ngx_recv_pt         recv; // fn pointer to whatever recv fn used (different for idfferent platforms / protocol
+    ngx_recv_pt         recv; // fn pointer to whatever recv fn used (different for dfferent platforms / protocol
     ngx_send_pt         send; // ditto
     ngx_recv_chain_pt   recv_chain;
     ngx_send_chain_pt   send_chain;
