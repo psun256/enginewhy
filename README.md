@@ -5,6 +5,22 @@ Production't graden't load balancer.
 
 ## Todo
 - [ ] architecture astronauting
+  - balancer module
+    - just the algorithms i guess
+- 
+  - backend module
+    - manages the backend pool
+    - deals with health / load check
+    - BackendPool for all the backends stored together
+    - Backend for individual backends
+    - has some methods used by balancer module to pick a suitable backend
+  - proxy module 
+    - all the different supported protocols to handle
+    - will create a session / stream context structure (ConnectionContext)
+      - not globally tracked (this might change for UDP!)
+      - mainly some metadata
+  - config module
+    - set up all the stuff or something
 - [ ] stream / session handling (i think wrapper around tokio TcpStream)
 - [ ] basic backend pooling
 - [ ] layer 4 load balancing
@@ -103,3 +119,10 @@ process to load balance:
 - connect to the server
 - proxy the data (copy_bidirectional? maybe we want some metrics or logging, so might do manually)
 - cleanup when smoeone leavesr or something goes wrong (with TCP, OS / tokio will tell us, with UDP probably just timeout based, and a periodic sweep of all sessions)
+
+
+### UDP
+UDP is connectionless, and i don't think UdpSocket or UdpFramed implement the traits required for tokio copy_bidirectional
+but async write and read don't work on just regular datagrams, so probably not possible.
+
+Would require us to implement our own bidirectional copying / proxying, as well as tracking "active" connections.

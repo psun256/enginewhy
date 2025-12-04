@@ -1,5 +1,11 @@
+mod balancer;
+mod config;
+mod backend;
+mod proxy;
+
 use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
