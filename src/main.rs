@@ -1,3 +1,17 @@
+macro_rules! info {
+    ($($arg:tt)*) => {{
+        print!("info: ");
+        println!($($arg)*);
+    }};
+}
+
+macro_rules! error {
+    ($($arg:tt)*) => {
+        eprint!("error: ");
+        eprintln!($($arg)*);
+    };
+}
+
 mod netutils;
 
 use anywho::Error;
@@ -16,14 +30,14 @@ async fn main() -> Result<(), Error> {
 
     let current_index = Arc::new(Mutex::new(0));
 
-    println!("enginewhy starting on 0.0.0.0:8080");
-    println!("backends: {:?}", backends);
+    info!("enginewhy starting on 0.0.0.0:8080");
+    info!("backends: {:?}", backends);
 
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
 
     loop {
         let (client, addr) = listener.accept().await?;
-        println!("info: new connection from {}", addr);
+        info!("new connection from {}", addr);
 
         let backend = {
             let mut index = current_index.lock().await;
@@ -32,10 +46,10 @@ async fn main() -> Result<(), Error> {
             selected_backend
         };
 
-        println!("info: routing client {} to backend {}", addr, backend);
+        info!("routing client {} to backend {}", addr, backend);
 
         if let Err(e) = tunnel(client, backend).await {
-            eprintln!("error: proxy failed for {}: {}", addr, e);
+            error!("proxy failed for {}: {}", addr, e);
         }
     }
 }
