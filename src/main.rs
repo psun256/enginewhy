@@ -1,47 +1,11 @@
-use std::sync::Arc;
-use std::fmt;
-use tokio::io;
-use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::Mutex;
+mod netutils;
+
 use anywho::Error;
+use netutils::{Backend, proxy, proxy_connection};
+use std::sync::Arc;
 
-#[derive(Clone, Debug)]
-struct Backend {
-    address: String,
-}
-
-impl fmt::Display for Backend {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.address)
-    }
-}
-
-impl Backend {
-    fn new(address: String) -> Self {
-        Backend { address }
-    }
-}
-
-async fn proxy_connection(client_stream: TcpStream, backend: &Backend) -> Result<(), io::Error> {
-    let log_error = |e| { eprintln!("error: something went wrong {}", e); e };
-
-    println!("info: connecting to backend {}", backend);
-    let backend_stream = TcpStream::connect(&backend.address).await.map_err(log_error)?;
-    println!("info: the bluetooth device is connected successfully {}", backend);
-
-    let (mut client_read, mut client_write) = client_stream.into_split();
-    let (mut backend_read, mut backend_write) = backend_stream.into_split();
-
-    let client_to_backend = io::copy(&mut client_read, &mut backend_write);
-    let backend_to_client = io::copy(&mut backend_read, &mut client_write);
-
-    let _ = tokio::select! {
-        res_a = client_to_backend => res_a.map_err(log_error)?,
-        res_b = backend_to_client => res_b.map_err(log_error)?,
-    };
-
-    Ok(())
-}
+use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
