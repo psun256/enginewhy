@@ -1,7 +1,7 @@
 mod netutils;
 
 use anywho::Error;
-use netutils::{Backend, proxy, proxy_connection};
+use netutils::{Backend, tunnel};
 use std::sync::Arc;
 
 use tokio::net::TcpListener;
@@ -16,32 +16,26 @@ async fn main() -> Result<(), Error> {
 
     let current_index = Arc::new(Mutex::new(0));
 
-    println!("lb starting on 0.0.0.0:8080");
+    println!("enginewhy starting on 0.0.0.0:8080");
     println!("backends: {:?}", backends);
 
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
 
     loop {
-        let (socket, addr) = listener.accept().await?;
+        let (client, addr) = listener.accept().await?;
         println!("info: new connection from {}", addr);
 
-        let backends_clone = backends.clone();
-        let index_clone = current_index.clone();
+        let backend = {
+            let mut index = current_index.lock().await;
+            let selected_backend = backends[*index].clone();
+            *index = (*index + 1) % backends.len();
+            selected_backend
+        };
 
-        tokio::spawn(async move {
-            // Round Robin
-            let backend = {
-                let mut index = index_clone.lock().await;
-                let selected_backend = backends_clone[*index].clone();
-                *index = (*index + 1) % backends_clone.len();
-                selected_backend
-            };
+        println!("info: routing client {} to backend {}", addr, backend);
 
-            println!("info: routing client {} to backend {}", addr, backend);
-
-            if let Err(e) = proxy_connection(socket, &backend).await {
-                eprintln!("error: proxy failed for {}: {}", addr, e);
-            }
-        });
+        if let Err(e) = tunnel(client, backend).await {
+            eprintln!("error: proxy failed for {}: {}", addr, e);
+        }
     }
 }
