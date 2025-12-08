@@ -7,11 +7,15 @@ use std::error::Error;
 #[derive(Clone, Debug)]
 pub struct Backend {
     address: String,
+    pub current_load : u32
 }
 
 impl Backend {
     pub fn new(address: String) -> Self {
-        Backend { address }
+        Backend { 
+            address,  
+            current_load : 0 
+        }
     }
 }
 

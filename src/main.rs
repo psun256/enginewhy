@@ -13,6 +13,7 @@ macro_rules! error {
 }
 
 mod netutils;
+mod balancer;
 
 use anywho::Error;
 use netutils::{Backend, tunnel};
