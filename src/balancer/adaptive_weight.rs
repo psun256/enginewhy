@@ -19,7 +19,7 @@ impl ServerMetrics {
         ServerMetrics { cpu: 0.0, mem: 0.0, net: 0.0, io: 0.0 }
     }
 
-    pub fn update_ema(&mut self, cpu: f64, mem: f64, net: f64, io: f64, alpha: f64) {
+    pub fn update(&mut self, cpu: f64, mem: f64, net: f64, io: f64, alpha: f64) {
         self.cpu = cpu;
         self.mem = mem;
         self.net = net;
@@ -40,29 +40,21 @@ impl ServerState {
     }
 }
 
-/// This implementation keeps an EMA of reported resource usage (cpu/mem/net/io),
-/// computes a composite load L = sum(coeff_i * metric_i) and converts that to
-/// a selection weight. Lower load -> higher weight. Selection is weighted-random.
 pub struct AdaptiveBalancer {
     servers: Vec<ServerState>,
     // resource coefficients (cpu, mem, net, io) - sum to 1.0
     coeffs: [f64; 4],
-    // EMA smoothing factor (alpha)
     alpha: f64,
     rng: SmallRng,
 }
 
 impl AdaptiveBalancer {
-    /// Create a new balancer from a list of backends.
-    /// `coeffs` are the importance weights for cpu,mem,net,io respectively.
-    /// `alpha` controls EMA smoothing (0..1). Typical alpha ~0.2-0.5.
     pub fn new(backends: Vec<Backend>, coeffs: [f64; 4], alpha: f64) -> Self {
         let servers = backends.into_iter().map(ServerState::new).collect();
         let rng = SmallRng::from_entropy();
         AdaptiveBalancer { servers, coeffs, alpha, rng }
     }
 
-    /// Add a backend at runtime.
     pub fn add_backend(&mut self, backend: Backend) {
         self.servers.push(ServerState::new(backend));
     }
@@ -72,7 +64,7 @@ impl AdaptiveBalancer {
     pub fn update_metrics(&mut self, backend_addr: &str, cpu: f64, mem: f64, net: f64, io: f64) {
         for s in &mut self.servers {
             if s.backend.to_string() == backend_addr {
-                s.metrics.update_ema(cpu, mem, net, io, self.alpha);
+                s.metrics.update(cpu, mem, net, io, self.alpha);
                 return;
             }
         }
