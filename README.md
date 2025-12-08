@@ -104,3 +104,12 @@ process to load balance:
 - connect to the server
 - proxy the data (copy_bidirectional? maybe we want some metrics or logging, so might do manually)
 - cleanup when smoeone leavesr or something goes wrong (with TCP, OS / tokio will tell us, with UDP probably just timeout based, and a periodic sweep of all sessions)
+
+## Load balancer algorithm
+- Choose a fixed weight coefficient for the resource parameter
+- Spawn a thread on a load balancer to host the iperf server, used for new onboarding server connecting to the load balancer to measure their maximum bandwidth
+- Spawn another thread for listening to resource update from connected server
+- Update the comprehensive load sum from eq (1), update the formula in eq (2) to (5)
+- Choose alpha for eq (8), and run the algorithm to choose which server
+- Extract the server from the server id using ```get_backend()``` 
+- Use ```tunnel()``` to proxy the packet
