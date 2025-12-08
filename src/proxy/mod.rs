@@ -1,27 +1,43 @@
-mod tcp_proxy;
-
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Instant;
+use crate::backend::Backend;
 
-// owned and accessed by only one thread.
+pub mod tcp;
+
 pub struct ConnectionContext {
-    pub connection_id: u64,
+    pub id: u64,
     pub client_addr: SocketAddr,
     pub start_time: Instant,
-    pub backend_addr: Option<SocketAddr>,
-    pub bytes_transferred: usize,
-    // pub protocol: String,
-    // pub sticky_id: Option<String>,
+    pub backend: Arc<Backend>,
+    pub bytes_transferred: u64,
 }
 
 impl ConnectionContext {
-    pub fn new(connection_id: u64, client_addr: SocketAddr) -> Self {
+    pub fn new(id: u64, client_addr: SocketAddr, backend: Arc<Backend>) -> Self {
+        backend.inc_connections();
+
         Self {
-            connection_id: connection_id,
-            client_addr: client_addr,
+            id,
+            client_addr,
             start_time: Instant::now(),
-            backend_addr: Default::default(),
+            backend,
             bytes_transferred: 0,
         }
+    }
+}
+
+impl Drop for ConnectionContext {
+    fn drop(&mut self) {
+        self.backend.dec_connections();
+        let duration = self.start_time.elapsed();
+
+        println!("info: conn_id={} closed. client={} backend={} bytes={} duration={:.2?}",
+            self.id,
+            self.client_addr,
+            self.backend.address,
+            self.bytes_transferred,
+            duration.as_secs_f64()
+        );
     }
 }
