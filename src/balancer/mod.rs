@@ -1,4 +1,7 @@
 pub mod round_robin;
+pub mod adaptive_weight;
+pub mod least_connections;
+pub mod ip_hashing;
 
 use std::fmt::Debug;
 use std::sync::Arc;
