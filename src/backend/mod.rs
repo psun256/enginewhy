@@ -1,11 +1,11 @@
 pub mod health;
 
+use crate::backend::health::ServerMetrics;
 use core::fmt;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use crate::backend::health::ServerMetrics;
 
 // A possible endpoint for a proxied connection.
 // Note that multiple may live on the same server, hence the Arc<RwLock<ServerMetric>>

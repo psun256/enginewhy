@@ -4,7 +4,8 @@ use crate::balancer::{Balancer, ConnectionInfo};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
 use std::fmt::Debug;
-use std::sync::{Arc};
+use std::fs::Metadata;
+use std::sync::{Arc, RwLock};
 
 #[derive(Debug)]
 struct AdaptiveNode {
@@ -27,7 +28,7 @@ impl AdaptiveWeightBalancer {
             .iter()
             .map(|b| AdaptiveNode {
                 backend: b.clone(),
-                weight: 0f64,
+                weight: 1f64,
             })
             .collect();
 
@@ -85,7 +86,6 @@ impl Balancer for AdaptiveWeightBalancer {
             };
 
             let ratio = risk / node.weight;
-
             if ratio <= threshold {
                 return Some(node.backend.clone());
             }
@@ -140,5 +140,128 @@ impl Balancer for AdaptiveWeightBalancer {
                 Some(self.pool[i].backend.clone())
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::backend::Backend;
+    use std::net::SocketAddr;
+
+    fn backend_factory(id: &str, ip: &str, port: u16) -> Arc<Backend> {
+        Arc::new(Backend::new(
+            id.to_string(),
+            SocketAddr::new(ip.parse().unwrap(), port),
+            Arc::new(RwLock::new(ServerMetrics::default())),
+        ))
+    }
+
+    fn unused_ctx() -> ConnectionInfo {
+        ConnectionInfo {
+            client_ip: ("0.0.0.0".parse().unwrap()),
+        }
+    }
+
+    #[test]
+    fn basic_weight_update_and_choose() {
+        let backends = BackendPool::new(vec![
+            backend_factory("server-0", "127.0.0.1", 3000),
+            backend_factory("server-1", "127.0.0.1", 3001),
+        ]);
+        let mut b = AdaptiveWeightBalancer::new(backends.clone(), [0.5, 0.2, 0.2, 0.1], 0.5);
+        // initially equal weights
+        // update one backend to be heavily loaded
+        {
+            let mut sm0_guard = backends.backends.get(0).unwrap().metrics.write().unwrap();
+            sm0_guard.update(90.0, 80.0, 10.0, 5.0);
+        }
+        {
+            let mut sm1_guard = backends.backends.get(1).unwrap().metrics.write().unwrap();
+            sm1_guard.update(10.0, 5.0, 1.0, 1.0);
+        }
+
+        // Choose backend: should pick the less loaded host server1
+        let chosen = b
+            .choose_backend(unused_ctx())
+            .expect("should choose a backend");
+
+        let sm0: &ServerMetrics = &backends.backends.get(0).unwrap().metrics.read().unwrap();
+        let sm1: &ServerMetrics = &backends.backends.get(1).unwrap().metrics.read().unwrap();
+        println!("{:?}, {:?}", sm0, sm1);
+        assert_eq!(chosen.id, "server-1");
+    }
+
+    #[test]
+    fn choose_none_when_empty() {
+        let mut b =
+            AdaptiveWeightBalancer::new(BackendPool::new(vec![]), [0.5, 0.2, 0.2, 0.1], 0.5);
+        assert!(b.choose_backend(unused_ctx()).is_none());
+    }
+
+    #[test]
+    fn ratio_triggers_immediate_selection() {
+        // Arrange two servers where server 1 has composite load 0 and server 2 has composite load 100.
+        // With alpha = 1.0 and two servers, threshold = 1.0 * (r_sum / w_sum) = 1.0 * (100 / 2) = 50.
+        // Server 0 ratio = 0 / 1 = 0 <= 50 so it should be chosen immediately.
+        let backends = BackendPool::new(vec![
+            backend_factory("server-0", "127.0.0.1", 3000),
+            backend_factory("server-1", "127.0.0.1", 3001),
+        ]);
+        let mut b = AdaptiveWeightBalancer::new(backends.clone(), [0.25, 0.25, 0.25, 0.25], 1.0);
+
+        {
+            let mut sm0_guard = backends.backends.get(0).unwrap().metrics.write().unwrap();
+            sm0_guard.update(0.0, 0.0, 0.0, 0.0);
+        }
+        {
+            let mut sm1_guard = backends.backends.get(1).unwrap().metrics.write().unwrap();
+            sm1_guard.update(100.0, 100.0, 100.0, 100.0);
+        }
+
+        let chosen = b
+            .choose_backend(unused_ctx())
+            .expect("should choose a backend");
+        assert_eq!(chosen.id, "server-0");
+    }
+
+    #[test]
+    fn choose_min_current_load_when_no_ratio() {
+        // Arrange three servers with identical composite loads so no server satisfies Ri/Wi <= threshold
+        // (set alpha < 1 so threshold < ratio). The implementation then falls back to picking the
+        // server with minimum current_load
+        let backends = BackendPool::new(vec![
+            backend_factory("server-0", "127.0.0.1", 3000),
+            backend_factory("server-1", "127.0.0.1", 3001),
+            backend_factory("server-2", "127.0.0.1", 3002),
+        ]);
+
+        // set current_loads (field expected to be public)
+
+        {
+            let mut sm0_guard = backends.backends.get(0).unwrap().metrics.write().unwrap();
+            sm0_guard.update(10.0, 10.0, 10.0, 10.0);
+        }
+        {
+            let mut sm1_guard = backends.backends.get(1).unwrap().metrics.write().unwrap();
+            sm1_guard.update(5.0, 5.0, 5.0, 5.0);
+        }
+        {
+            let mut sm2_guard = backends.backends.get(2).unwrap().metrics.write().unwrap();
+            sm2_guard.update(20.0, 20.0, 20.0, 20.0);
+        }
+
+        // Use coeffs that only consider CPU so composite load is easy to reason about.
+        let mut bal = AdaptiveWeightBalancer::new(backends.clone(), [1.0, 0.0, 0.0, 0.0], 0.5);
+
+        // set identical composite loads > 0 for all so ratio = x and threshold = alpha * x < x
+        // you will have threshold = 25 for all 3 backend servers and ratio = 50
+        // so that forces to choose the smallest current load backend
+
+        let chosen = bal
+            .choose_backend(unused_ctx())
+            .expect("should choose a backend");
+        // expect server with smallest current_load server-1
+        assert_eq!(chosen.id, "server-1");
     }
 }

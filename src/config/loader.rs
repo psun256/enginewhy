@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, RwLock};
 
-use crate::backend::*;
 use crate::backend::health::*;
+use crate::backend::*;
 use crate::balancer::Balancer;
 use crate::balancer::adaptive_weight::AdaptiveWeightBalancer;
 use crate::balancer::round_robin::RoundRobinBalancer;
@@ -19,23 +19,26 @@ pub type PortListeners = HashMap<u16, RoutingTable>;
 
 fn parse_client(s: &str) -> Result<(IpCidr, u16), String> {
     // just splits "0.0.0.0/0:80" into ("0.0.0.0/0", 80)
-    let (ip_part, port_part) = s.rsplit_once(':')
+    let (ip_part, port_part) = s
+        .rsplit_once(':')
         .ok_or_else(|| format!("badly formatted client: {}", s))?;
 
-    let port = port_part.parse()
-        .map_err(|_| format!("bad port: {}", s))?;
-    let cidr = ip_part.parse()
-        .map_err(|_| format!("bad ip/mask: {}", s))?;
+    let port = port_part.parse().map_err(|_| format!("bad port: {}", s))?;
+    let cidr = ip_part.parse().map_err(|_| format!("bad ip/mask: {}", s))?;
 
     Ok((cidr, port))
 }
 
-pub fn build_lb(config: AppConfig) -> Result<(PortListeners, HashMap<IpAddr, Arc<RwLock<ServerMetrics>>>), String> {
+pub fn build_lb(
+    config: &AppConfig,
+) -> Result<(PortListeners, HashMap<IpAddr, Arc<RwLock<ServerMetrics>>>), String> {
     let mut healths: HashMap<IpAddr, Arc<RwLock<ServerMetrics>>> = HashMap::new();
     let mut backends: HashMap<String, Arc<Backend>> = HashMap::new();
 
-    for backend_cfg in config.backends {
-        let ip: IpAddr = backend_cfg.ip.parse()
+    for backend_cfg in &config.backends {
+        let ip: IpAddr = backend_cfg
+            .ip
+            .parse()
             .map_err(|_| format!("bad ip: {}", backend_cfg.ip))?;
         let addr = SocketAddr::new(ip, backend_cfg.port);
 
@@ -46,12 +49,12 @@ pub fn build_lb(config: AppConfig) -> Result<(PortListeners, HashMap<IpAddr, Arc
 
         let backend = Arc::new(Backend::new(backend_cfg.id.clone(), addr, health));
 
-        backends.insert(backend_cfg.id, backend);
+        backends.insert(backend_cfg.id.clone(), backend);
     }
 
     let mut listeners: PortListeners = HashMap::new();
 
-    for rule in config.rules {
+    for rule in &config.rules {
         let mut target_backends = Vec::new();
 
         for target_name in &rule.targets {
@@ -84,7 +87,7 @@ pub fn build_lb(config: AppConfig) -> Result<(PortListeners, HashMap<IpAddr, Arc
         // cost of minor penalty to load balancing "quality" when you have several client ports.
         let mut port_groups: HashMap<u16, Vec<IpCidr>> = HashMap::new();
 
-        for client_def in rule.clients {
+        for client_def in &rule.clients {
             let (cidr, port) = parse_client(&client_def)?;
             port_groups.entry(port).or_default().push(cidr);
         }
