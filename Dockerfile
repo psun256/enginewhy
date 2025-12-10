@@ -36,4 +36,5 @@ FROM alpine:latest AS runtime
 # RUN apk add --no-cache ca-certificates curl netcat-openbsd bind-tools strace
 WORKDIR /enginewhy
 COPY --from=builder /enginewhy/target/x86_64-unknown-linux-musl/release/l4lb /usr/bin/l4lb
+COPY config.yaml .
 ENTRYPOINT ["l4lb"]

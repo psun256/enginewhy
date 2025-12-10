@@ -1,10 +1,10 @@
-use crate::backend::{Backend, BackendPool, ServerMetrics};
+use crate::backend::{Backend, BackendPool};
+use crate::backend::health::ServerMetrics;
 use crate::balancer::{Balancer, ConnectionInfo};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
 use std::fmt::Debug;
-use std::fs::Metadata;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc};
 
 #[derive(Debug)]
 struct AdaptiveNode {

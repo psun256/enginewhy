@@ -4,6 +4,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, RwLock};
 
 use crate::backend::*;
+use crate::backend::health::*;
 use crate::balancer::Balancer;
 use crate::balancer::adaptive_weight::AdaptiveWeightBalancer;
 use crate::balancer::round_robin::RoundRobinBalancer;
@@ -26,7 +27,7 @@ fn parse_client(s: &str) -> (IpCidr, u16) {
 
 pub type PortListeners = HashMap<u16, RoutingTable>;
 
-pub fn build_lb(config: AppConfig) -> PortListeners {
+pub fn build_lb(config: AppConfig) -> (PortListeners, HashMap<IpAddr, Arc<RwLock<ServerMetrics>>>) {
     let mut healths: HashMap<IpAddr, Arc<RwLock<ServerMetrics>>> = HashMap::new();
     let mut backends: HashMap<String, Arc<Backend>> = HashMap::new();
 
@@ -116,5 +117,5 @@ pub fn build_lb(config: AppConfig) -> PortListeners {
             .sort_by(|(a, _), (b, _)| a.network_length().cmp(&b.network_length()));
     }
 
-    listeners
+    (listeners, healths)
 }
