@@ -72,7 +72,7 @@ impl Balancer for AdaptiveWeightBalancer {
 
         let safe_w_sum = w_sum.max(1e-12);
         let threshold = self.alpha * (r_sum / safe_w_sum);
-
+        
         for idx in 0..self.pool.len() {
             let node = &self.pool[idx];
 
