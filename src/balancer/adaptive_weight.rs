@@ -27,7 +27,7 @@ impl AdaptiveWeightBalancer {
             .iter()
             .map(|b| AdaptiveNode {
                 backend: b.clone(),
-                weight: 0f64,
+                weight: 1f64,
             })
             .collect();
 
@@ -71,7 +71,7 @@ impl Balancer for AdaptiveWeightBalancer {
 
         let safe_w_sum = w_sum.max(1e-12);
         let threshold = self.alpha * (r_sum / safe_w_sum);
-
+        
         for idx in 0..self.pool.len() {
             let node = &self.pool[idx];
 
@@ -85,7 +85,6 @@ impl Balancer for AdaptiveWeightBalancer {
             };
 
             let ratio = risk / node.weight;
-
             if ratio <= threshold {
                 return Some(node.backend.clone());
             }
@@ -172,14 +171,10 @@ mod tests {
         let mut b = AdaptiveWeightBalancer::new(backends.clone(), [0.5, 0.2, 0.2, 0.1], 0.5);
         // initially equal weights
         // update one backend to be heavily loaded
-        {
-            let mut sm0_guard = backends.backends.get(0).unwrap().metrics.write().unwrap();
-            sm0_guard.update(90.0, 80.0, 10.0, 5.0);
-        }
-        {
-            let mut sm1_guard = backends.backends.get(1).unwrap().metrics.write().unwrap();
-            sm1_guard.update(10.0, 5.0, 1.0, 1.0);
-        }
+        let mut sm0_guard = backends.backends.get(0).unwrap().metrics.write().unwrap();
+        sm0_guard.update(90.0, 80.0, 10.0, 5.0);
+        let mut sm1_guard = backends.backends.get(1).unwrap().metrics.write().unwrap();
+        sm1_guard.update(10.0, 5.0, 1.0, 1.0);
 
         // Choose backend: should pick the less loaded host server1
         let chosen = b
@@ -203,26 +198,22 @@ mod tests {
     fn ratio_triggers_immediate_selection() {
         // Arrange two servers where server 1 has composite load 0 and server 2 has composite load 100.
         // With alpha = 1.0 and two servers, threshold = 1.0 * (r_sum / w_sum) = 1.0 * (100 / 2) = 50.
-        // Server 1 ratio = 0 / 1 = 0 <= 50 so it should be chosen immediately.
+        // Server 0 ratio = 0 / 1 = 0 <= 50 so it should be chosen immediately.
         let backends = BackendPool::new(vec![
             backend_factory("server-0", "127.0.0.1", 3000),
             backend_factory("server-1", "127.0.0.1", 3001),
         ]);
         let mut b = AdaptiveWeightBalancer::new(backends.clone(), [0.25, 0.25, 0.25, 0.25], 1.0);
 
-        {
-            let mut sm0_guard = backends.backends.get(0).unwrap().metrics.write().unwrap();
-            sm0_guard.update(0.0, 0.0, 0.0, 0.0);
-        }
-        {
-            let mut sm1_guard = backends.backends.get(1).unwrap().metrics.write().unwrap();
-            sm1_guard.update(100.0, 100.0, 100.0, 100.0);
-        }
+        let mut sm0_guard = backends.backends.get(0).unwrap().metrics.write().unwrap();
+        sm0_guard.update(0.0, 0.0, 0.0, 0.0);
+        let mut sm1_guard = backends.backends.get(1).unwrap().metrics.write().unwrap();
+        sm1_guard.update(100.0, 100.0, 100.0, 100.0);
 
         let chosen = b
             .choose_backend(unused_ctx())
             .expect("should choose a backend");
-        assert_eq!(chosen.id, "server-1");
+        assert_eq!(chosen.id, "server-0");
     }
 
     #[test]
@@ -237,19 +228,12 @@ mod tests {
         ]);
 
         // set current_loads (field expected to be public)
-
-        {
-            let mut sm0_guard = backends.backends.get(0).unwrap().metrics.write().unwrap();
-            sm0_guard.update(10.0, 10.0, 10.0, 10.0);
-        }
-        {
-            let mut sm1_guard = backends.backends.get(1).unwrap().metrics.write().unwrap();
-            sm1_guard.update(5.0, 5.0, 5.0, 5.0);
-        }
-        {
-            let mut sm2_guard = backends.backends.get(2).unwrap().metrics.write().unwrap();
-            sm2_guard.update(20.0, 20.0, 20.0, 20.0);
-        }
+        let mut sm0_guard = backends.backends.get(0).unwrap().metrics.write().unwrap();
+        sm0_guard.update(10.0, 10.0, 10.0, 10.0);
+        let mut sm1_guard = backends.backends.get(1).unwrap().metrics.write().unwrap();
+        sm1_guard.update(5.0, 5.0, 5.0, 5.0);
+        let mut sm2_guard = backends.backends.get(2).unwrap().metrics.write().unwrap();
+        sm2_guard.update(20.0, 20.0, 20.0, 20.0);
 
         // Use coeffs that only consider CPU so composite load is easy to reason about.
         let mut bal = AdaptiveWeightBalancer::new(backends.clone(), [1.0, 0.0, 0.0, 0.0], 0.5);
