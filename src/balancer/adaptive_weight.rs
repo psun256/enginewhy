@@ -1,10 +1,10 @@
-use std::sync::{Arc, RwLock};
-use std::fmt::Debug;
-use std::fs::Metadata;
-use crate::backend::{Backend, BackendPool, ServerHealth};
-use crate::balancer::Balancer;
+use crate::backend::{Backend, BackendPool, ServerMetrics};
+use crate::balancer::{Balancer, ConnectionInfo};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
+use std::fmt::Debug;
+use std::fs::Metadata;
+use std::sync::{Arc, RwLock};
 
 #[derive(Debug)]
 struct AdaptiveNode {
@@ -22,7 +22,8 @@ pub struct AdaptiveWeightBalancer {
 
 impl AdaptiveWeightBalancer {
     pub fn new(pool: BackendPool, coefficients: [f64; 4], alpha: f64) -> Self {
-        let nodes = pool.backends
+        let nodes = pool
+            .backends
             .iter()
             .map(|b| AdaptiveNode {
                 backend: b.clone(),
@@ -34,20 +35,20 @@ impl AdaptiveWeightBalancer {
             pool: nodes,
             coefficients,
             alpha,
-            rng: SmallRng::from_rng(&mut rand::rng())
+            rng: SmallRng::from_rng(&mut rand::rng()),
         }
     }
 
-    pub fn metrics_to_weight(&self, metrics: &ServerHealth) -> f64 {
-        self.coefficients[0] * metrics.cpu +
-        self.coefficients[1] * metrics.mem +
-        self.coefficients[2] * metrics.net +
-        self.coefficients[3] * metrics.io
+    pub fn metrics_to_weight(&self, metrics: &ServerMetrics) -> f64 {
+        self.coefficients[0] * metrics.cpu
+            + self.coefficients[1] * metrics.mem
+            + self.coefficients[2] * metrics.net
+            + self.coefficients[3] * metrics.io
     }
 }
 
 impl Balancer for AdaptiveWeightBalancer {
-    fn choose_backend(&mut self) -> Option<Arc<Backend>> {
+    fn choose_backend(&mut self, ctx: ConnectionInfo) -> Option<Arc<Backend>> {
         if self.pool.is_empty() {
             return None;
         }
@@ -62,7 +63,9 @@ impl Balancer for AdaptiveWeightBalancer {
                 r_sum += self.metrics_to_weight(&health);
             }
             w_sum += node.weight;
-            l_sum += node.backend.active_connections
+            l_sum += node
+                .backend
+                .active_connections
                 .load(std::sync::atomic::Ordering::Relaxed);
         }
 
@@ -72,7 +75,9 @@ impl Balancer for AdaptiveWeightBalancer {
         for idx in 0..self.pool.len() {
             let node = &self.pool[idx];
 
-            if node.weight <= 0.001 { continue; }
+            if node.weight <= 0.001 {
+                continue;
+            }
 
             let risk = match node.backend.metrics.read() {
                 Ok(h) => self.metrics_to_weight(&h),
@@ -93,7 +98,9 @@ impl Balancer for AdaptiveWeightBalancer {
         let l_sum_f64 = l_sum as f64;
 
         for node in &self.pool {
-            let load = node.backend.active_connections
+            let load = node
+                .backend
+                .active_connections
                 .load(std::sync::atomic::Ordering::Relaxed) as f64;
             let weight = node.weight.max(1e-12);
             let lwi = load * (safe_w_sum / weight) * l_sum_f64;
@@ -107,7 +114,9 @@ impl Balancer for AdaptiveWeightBalancer {
         let mut min_load = usize::MAX;
 
         for node in &mut self.pool {
-            let load = node.backend.active_connections
+            let load = node
+                .backend
+                .active_connections
                 .load(std::sync::atomic::Ordering::Relaxed);
             let load_f64 = load as f64;
             let weight = node.weight.max(1e-12);

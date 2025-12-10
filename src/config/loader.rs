@@ -1,12 +1,12 @@
+use cidr::IpCidr;
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, RwLock};
-use cidr::IpCidr;
 
 use crate::backend::*;
 use crate::balancer::Balancer;
-use crate::balancer::round_robin::RoundRobinBalancer;
 use crate::balancer::adaptive_weight::AdaptiveWeightBalancer;
+use crate::balancer::round_robin::RoundRobinBalancer;
 use crate::config::*;
 
 pub struct RoutingTable {
@@ -27,7 +27,7 @@ fn parse_client(s: &str) -> (IpCidr, u16) {
 pub type PortListeners = HashMap<u16, RoutingTable>;
 
 pub fn build_lb(config: AppConfig) -> PortListeners {
-    let mut healths: HashMap<IpAddr, Arc<RwLock<ServerHealth>>> = HashMap::new();
+    let mut healths: HashMap<IpAddr, Arc<RwLock<ServerMetrics>>> = HashMap::new();
     let mut backends: HashMap<String, Arc<Backend>> = HashMap::new();
 
     for backend_cfg in config.backends {
@@ -36,14 +36,10 @@ pub fn build_lb(config: AppConfig) -> PortListeners {
 
         let health = healths
             .entry(ip)
-            .or_insert_with(|| Arc::new(RwLock::new(ServerHealth::default())))
+            .or_insert_with(|| Arc::new(RwLock::new(ServerMetrics::default())))
             .clone();
 
-        let backend = Arc::new(Backend::new(
-            backend_cfg.id.clone(),
-            addr,
-            health,
-        ));
+        let backend = Arc::new(Backend::new(backend_cfg.id.clone(), addr, health));
 
         backends.insert(backend_cfg.id, backend);
     }
@@ -60,8 +56,7 @@ pub fn build_lb(config: AppConfig) -> PortListeners {
                         target_backends.push(backend.clone());
                     }
                 }
-            }
-            else if let Some(backend) = backends.get(target_name) {
+            } else if let Some(backend) = backends.get(target_name) {
                 target_backends.push(backend.clone());
             } else {
                 eprintln!("warning: target {} not found", target_name);
@@ -98,12 +93,11 @@ pub fn build_lb(config: AppConfig) -> PortListeners {
             let pool = BackendPool::new(target_backends.clone());
 
             let balancer: Box<dyn Balancer + Send> = match &rule.strategy {
-                LoadBalancerStrategy::RoundRobin => {
-                    Box::new(RoundRobinBalancer::new(pool))
-                },
-                LoadBalancerStrategy::Adaptive { coefficients, alpha } => {
-                    Box::new(AdaptiveWeightBalancer::new(pool, *coefficients, *alpha))
-                }
+                LoadBalancerStrategy::RoundRobin => Box::new(RoundRobinBalancer::new(pool)),
+                LoadBalancerStrategy::Adaptive {
+                    coefficients,
+                    alpha,
+                } => Box::new(AdaptiveWeightBalancer::new(pool, *coefficients, *alpha)),
             };
 
             let balancer_idx = table.balancers.len();
@@ -117,7 +111,9 @@ pub fn build_lb(config: AppConfig) -> PortListeners {
 
     // sort to make most specific first, so that first match == longest prefix match
     for table in listeners.values_mut() {
-        table.entries.sort_by(|(a, _), (b, _)| a.network_length().cmp(&b.network_length()));
+        table
+            .entries
+            .sort_by(|(a, _), (b, _)| a.network_length().cmp(&b.network_length()));
     }
 
     listeners

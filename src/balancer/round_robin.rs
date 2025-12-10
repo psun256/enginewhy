@@ -1,7 +1,7 @@
-use std::sync::{Arc, RwLock};
-use std::fmt::Debug;
 use crate::backend::{Backend, BackendPool};
-use crate::balancer::Balancer;
+use crate::balancer::{Balancer, ConnectionInfo};
+use std::fmt::Debug;
+use std::sync::{Arc, RwLock};
 
 // only the main thread for receiving connections should be
 // doing the load balancing. alternatively, each thread
@@ -14,17 +14,16 @@ pub struct RoundRobinBalancer {
 
 impl RoundRobinBalancer {
     pub fn new(pool: BackendPool) -> RoundRobinBalancer {
-        Self {
-            pool,
-            index: 0,
-        }
+        Self { pool, index: 0 }
     }
 }
 
 impl Balancer for RoundRobinBalancer {
-    fn choose_backend(&mut self) -> Option<Arc<Backend>> {
+    fn choose_backend(&mut self, ctx: ConnectionInfo) -> Option<Arc<Backend>> {
         let backends = self.pool.backends.clone();
-        if backends.is_empty() { return None; }
+        if backends.is_empty() {
+            return None;
+        }
 
         let backend = backends[self.index % backends.len()].clone();
         self.index = self.index.wrapping_add(1);

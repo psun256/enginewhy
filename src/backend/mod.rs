@@ -2,27 +2,20 @@ pub mod health;
 
 use core::fmt;
 use std::net::SocketAddr;
-use std::sync::RwLock;
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
-
-// Physical server information
-#[derive(Debug)]
-pub struct Server {
-    pub endpoints: Arc<Vec<Arc<Backend>>>,
-    pub metrics: Arc<RwLock<ServerHealth>>,
-}
 
 // Physical server health statistics, used for certain load balancing algorithms
 #[derive(Debug, Default)]
-pub struct ServerHealth {
+pub struct ServerMetrics {
     pub cpu: f64,
     pub mem: f64,
     pub net: f64,
     pub io: f64,
 }
 
-impl ServerHealth {
+impl ServerMetrics {
     pub fn update(&mut self, cpu: f64, mem: f64, net: f64, io: f64) {
         self.cpu = cpu;
         self.mem = mem;
@@ -38,11 +31,15 @@ pub struct Backend {
     pub id: String,
     pub address: SocketAddr,
     pub active_connections: AtomicUsize,
-    pub metrics: Arc<RwLock<ServerHealth>>,
+    pub metrics: Arc<RwLock<ServerMetrics>>,
 }
 
 impl Backend {
-    pub fn new(id: String, address: SocketAddr, server_metrics: Arc<RwLock<ServerHealth>>) -> Self {
+    pub fn new(
+        id: String,
+        address: SocketAddr,
+        server_metrics: Arc<RwLock<ServerMetrics>>,
+    ) -> Self {
         Self {
             id: id.to_string(),
             address,
@@ -56,12 +53,20 @@ impl Backend {
     // enough not to behave poorly, so SeqCst is probably overkill.
     pub fn inc_connections(&self) {
         self.active_connections.fetch_add(1, Ordering::Relaxed);
-        println!("{} has {} connections open", self.id, self.active_connections.load(Ordering::Relaxed));
+        println!(
+            "{} has {} connections open",
+            self.id,
+            self.active_connections.load(Ordering::Relaxed)
+        );
     }
 
     pub fn dec_connections(&self) {
         self.active_connections.fetch_sub(1, Ordering::Relaxed);
-        println!("{} has {} connections open", self.id, self.active_connections.load(Ordering::Relaxed));
+        println!(
+            "{} has {} connections open",
+            self.id,
+            self.active_connections.load(Ordering::Relaxed)
+        );
     }
 }
 

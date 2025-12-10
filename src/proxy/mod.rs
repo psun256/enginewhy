@@ -1,7 +1,7 @@
+use crate::backend::Backend;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
-use crate::backend::Backend;
 
 pub mod tcp;
 
@@ -32,7 +32,8 @@ impl Drop for ConnectionContext {
         self.backend.dec_connections();
         let duration = self.start_time.elapsed();
 
-        println!("info: conn_id={} closed. client={} backend={} bytes={} duration={:.2?}",
+        println!(
+            "info: conn_id={} closed. client={} backend={} bytes={} duration={:.2?}",
             self.id,
             self.client_addr,
             self.backend.address,

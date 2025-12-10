@@ -13,8 +13,8 @@
 // specify which algorithm to use.
 pub mod loader;
 
-use std::collections::HashMap;
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
 pub struct AppConfig {
@@ -42,8 +42,5 @@ pub struct RuleConfig {
 #[serde(tag = "type")]
 pub enum LoadBalancerStrategy {
     RoundRobin,
-    Adaptive {
-        coefficients: [f64; 4],
-        alpha: f64,
-    },
+    Adaptive { coefficients: [f64; 4], alpha: f64 },
 }
