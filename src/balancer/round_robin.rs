@@ -1,7 +1,7 @@
 use crate::backend::{Backend, BackendPool};
 use crate::balancer::{Balancer, ConnectionInfo};
 use std::fmt::Debug;
-use std::sync::{Arc};
+use std::sync::Arc;
 
 // only the main thread for receiving connections should be
 // doing the load balancing. alternatively, each thread

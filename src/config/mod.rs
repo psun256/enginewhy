@@ -16,11 +16,27 @@ pub mod loader;
 use serde::Deserialize;
 use std::collections::HashMap;
 
+fn default_healthcheck_addr() -> String {
+    "0.0.0.0:8080".to_string()
+}
+
+fn default_iperf_addr() -> String {
+    "0.0.0.0:5201".to_string()
+}
+
 #[derive(Debug, Deserialize)]
 pub struct AppConfig {
+    #[serde(default = "default_healthcheck_addr")]
+    pub healthcheck_addr: String,
+
+    #[serde(default = "default_iperf_addr")]
+    pub iperf_addr: String,
+
     pub backends: Vec<BackendConfig>,
+
     #[serde(default)]
     pub clusters: HashMap<String, Vec<String>>,
+
     pub rules: Vec<RuleConfig>,
 }
 
