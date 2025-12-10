@@ -146,20 +146,14 @@ async fn main() -> std::io::Result<()> {
         }
         println!();
 
-        // Identify this process (client) by the local socket address used to connect
-        let server_identifier = match stream.local_addr() {
-            Ok(addr) => addr.to_string(),
-            Err(_) => format!("localhost:{}", PORT),
-        };
-
         let mut packet: HashMap<String, Value> = HashMap::new();
-        packet.insert("server_ip".to_string(), Value::String(server_identifier));
         packet.insert("cpu".to_string(), Value::from(cpu_usage));    // %
         packet.insert("mem".to_string(), Value::from(mem_usage));    // %
         packet.insert("net".to_string(), Value::from(net_usage_pct));
         packet.insert("io".to_string(), Value::from(io_usage));
 
         let serialized_packet = serde_json::to_string(&packet)?;
+        serialized_packet.push('\n');
         let _ = stream.write(serialized_packet.as_bytes());
 
         thread::sleep(Duration::from_secs(10));
