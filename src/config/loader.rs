@@ -15,24 +15,28 @@ pub struct RoutingTable {
     pub entries: Vec<(IpCidr, usize)>,
 }
 
-fn parse_client(s: &str) -> (IpCidr, u16) {
-    // just splits "0.0.0.0/0:80" into ("0.0.0.0/0", 80)
-    let (ip_part, port_part) = s.rsplit_once(':').expect("badly formatted client");
-
-    let port: u16 = port_part.parse().expect("bad port");
-    let cidr: IpCidr = ip_part.parse().expect("bad ip/mask");
-
-    (cidr, port)
-}
-
 pub type PortListeners = HashMap<u16, RoutingTable>;
 
-pub fn build_lb(config: AppConfig) -> (PortListeners, HashMap<IpAddr, Arc<RwLock<ServerMetrics>>>) {
+fn parse_client(s: &str) -> Result<(IpCidr, u16), String> {
+    // just splits "0.0.0.0/0:80" into ("0.0.0.0/0", 80)
+    let (ip_part, port_part) = s.rsplit_once(':')
+        .ok_or_else(|| format!("badly formatted client: {}", s))?;
+
+    let port = port_part.parse()
+        .map_err(|_| format!("bad port: {}", s))?;
+    let cidr = ip_part.parse()
+        .map_err(|_| format!("bad ip/mask: {}", s))?;
+
+    Ok((cidr, port))
+}
+
+pub fn build_lb(config: AppConfig) -> Result<(PortListeners, HashMap<IpAddr, Arc<RwLock<ServerMetrics>>>), String> {
     let mut healths: HashMap<IpAddr, Arc<RwLock<ServerMetrics>>> = HashMap::new();
     let mut backends: HashMap<String, Arc<Backend>> = HashMap::new();
 
     for backend_cfg in config.backends {
-        let ip: IpAddr = backend_cfg.ip.parse().unwrap();
+        let ip: IpAddr = backend_cfg.ip.parse()
+            .map_err(|_| format!("bad ip: {}", backend_cfg.ip))?;
         let addr = SocketAddr::new(ip, backend_cfg.port);
 
         let health = healths
@@ -81,7 +85,7 @@ pub fn build_lb(config: AppConfig) -> (PortListeners, HashMap<IpAddr, Arc<RwLock
         let mut port_groups: HashMap<u16, Vec<IpCidr>> = HashMap::new();
 
         for client_def in rule.clients {
-            let (cidr, port) = parse_client(&client_def);
+            let (cidr, port) = parse_client(&client_def)?;
             port_groups.entry(port).or_default().push(cidr);
         }
 
@@ -117,5 +121,5 @@ pub fn build_lb(config: AppConfig) -> (PortListeners, HashMap<IpAddr, Arc<RwLock
             .sort_by(|(a, _), (b, _)| a.network_length().cmp(&b.network_length()));
     }
 
-    (listeners, healths)
+    Ok((listeners, healths))
 }

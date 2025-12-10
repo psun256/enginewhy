@@ -24,7 +24,6 @@ rules:
 
   - clients:
       - "0.0.0.0/0:6767"
-      - "0.0.0.0/0:6969"
     targets: # no issues with duplicate servers or clusters
       - "priority-api"
       - "priority-api"
