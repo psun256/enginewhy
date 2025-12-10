@@ -6,6 +6,10 @@ mod proxy;
 use std::fs::File;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::net::TcpListener;
+use crate::backend::{Backend, BackendPool, ServerHealth};
+use crate::balancer::{Balancer, CURRENT_CONNECTION_INFO, ConnectionInfo};
+use crate::balancer::round_robin::RoundRobinBalancer;
+use crate::balancer::ip_hashing::SourceIPHash;
 use crate::proxy::tcp::proxy_tcp_connection;
 
 static NEXT_CONN_ID: AtomicU64 = AtomicU64::new(1);
@@ -47,6 +51,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let remote_ip = remote_addr.ip();
                 let conn_id = NEXT_CONN_ID.fetch_add(1, Ordering::Relaxed);
+                let client_ip = socket.local_addr()?;
+        
+                CURRENT_CONNECTION_INFO.with(|info| {
+                    *info.borrow_mut() = Some(ConnectionInfo { client_ip : client_ip });
+                });
 
                 let mut chosen_backend = None;
 
@@ -67,6 +76,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } else {
                     println!("error: no matching rule for {} on port {}", remote_ip, port);
                 }
+
+                // clear the slot after use to avoid stale data
+                CURRENT_CONNECTION_INFO.with(|info| {
+                    *info.borrow_mut() = None;
+                });
             }
         }));
     }

@@ -1,0 +1,89 @@
+services:
+  # two-arm load balancer  
+  load-balancer:
+    image: neoslhp/enginewhy-lb
+    container_name: load-balancer
+    tty: true
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 8G 
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    networks:
+      internal:
+        ipv4_address: 172.67.67.67
+      external:
+        ipv4_address: 192.67.67.67
+
+
+  server1-high-cpu:
+    image: neoslhp/enginewhy-server
+    container_name: server1
+    tty: true
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 8G
+    depends_on:
+      - load-balancer
+    cap_add:
+    - NET_ADMIN
+    networks: 
+      external:
+        ipv4_address: 192.67.67.2
+
+  server2-low-cpu:
+    image: neoslhp/enginewhy-server
+    container_name: server2
+    tty: true
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4G
+    depends_on:
+      - load-balancer
+    cap_add:
+    - NET_ADMIN
+    networks:
+      external:
+        ipv4_address: 192.67.67.3
+  
+  client:
+    image: neoslhp/enginewhy-ubuntu22.04
+    container_name: client
+    tty: true
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 4G
+    depends_on:
+      - load-balancer
+    cap_add:
+    - NET_ADMIN
+    networks:
+      internal:
+        ipv4_address: 172.67.67.2
+  
+networks:
+  internal:
+    driver: bridge
+    ipam:
+      config:
+      - subnet: 172.67.67.0/24
+  external:
+    driver: bridge
+    ipam:
+      config:
+      - subnet: 192.67.67.0/24
+  
+# Resources:
+# https://networkgeekstuff.com/networking/basic-load-balancer-scenarios-explained/
+# https://hub.docker.com/r/linuxserver/wireshark 
+# https://www.wcse.org/WCSE_2018/W110.pdf 
+# Deepseek
