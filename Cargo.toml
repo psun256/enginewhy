@@ -12,3 +12,6 @@ serde_json = "1.0.145"
 rperf3-rs = "0.3.9"
 cidr = "0.3.1"
 serde-saphyr = "0.0.10"
+arc-swap = "1.7.1"
+clap = { version = "4.5.53", features = ["derive"] }
+notify = "8.2.0"
