@@ -158,4 +158,54 @@ mod tests {
         println!("{:?}, {:?}", snaps, snaps2);
         assert_eq!(chosen.to_string(), "127.0.0.1:2");
     }
+
+    #[test]
+    fn choose_none_when_empty() {
+        let mut b = AdaptiveBalancer::new(vec![], [0.5, 0.2, 0.2, 0.1], 0.5);
+        assert!(b.choose_backend().is_none());
+    }
+
+    #[test]
+    fn ratio_triggers_immediate_selection() {
+        // Arrange two servers where server 1 has composite load 0 and server 2 has composite load 100.
+        // With alpha = 1.0 and two servers, threshold = 1.0 * (r_sum / w_sum) = 1.0 * (100 / 2) = 50.
+        // Server 1 ratio = 0 / 1 = 0 <= 50 so it should be chosen immediately.
+        let backends = vec![Backend::new("127.0.0.1:1".to_string()), Backend::new("127.0.0.1:2".to_string())];
+        let mut b = AdaptiveBalancer::new(backends, [0.25, 0.25, 0.25, 0.25], 1.0);
+
+        b.update_metrics("127.0.0.1:1", 0.0, 0.0, 0.0, 0.0);
+        b.update_metrics("127.0.0.1:2", 100.0, 100.0, 100.0, 100.0);
+
+        let chosen = b.choose_backend().expect("should choose a backend");
+        assert_eq!(chosen.to_string(), "127.0.0.1:1");
+    }
+
+    #[test]
+    fn choose_min_current_load_when_no_ratio() {
+        // Arrange three servers with identical composite loads so no server satisfies Ri/Wi <= threshold
+        // (set alpha < 1 so threshold < ratio). The implementation then falls back to picking the
+        // server with minimum current_load 
+        let mut s1 = Backend::new("127.0.0.1:1".to_string());
+        let mut s2 = Backend::new("127.0.0.1:2".to_string());
+        let mut s3 = Backend::new("127.0.0.1:3".to_string());
+
+        // set current_loads (field expected to be public)
+        s1.current_load = 10;
+        s2.current_load = 5;
+        s3.current_load = 20;
+
+        // Use coeffs that only consider CPU so composite load is easy to reason about.
+        let mut bal = AdaptiveBalancer::new(vec![s1, s2, s3], [1.0, 0.0, 0.0, 0.0], 0.5);
+
+        // set identical composite loads > 0 for all so ratio = x and threshold = alpha * x < x
+        // you will have threshold = 25 for all 3 backend servers and ratio = 50
+        // so that forces to choose the smallest current load backend
+        bal.update_metrics("127.0.0.1:1", 50.0, 0.0, 0.0, 0.0);
+        bal.update_metrics("127.0.0.1:2", 50.0, 0.0, 0.0, 0.0);
+        bal.update_metrics("127.0.0.1:3", 50.0, 0.0, 0.0, 0.0);
+
+        let chosen = bal.choose_backend().expect("should choose a backend");
+        // expect server with smallest current_load (127.0.0.1:2)
+        assert_eq!(chosen.to_string(), "127.0.0.1:2");
+    }
 }
