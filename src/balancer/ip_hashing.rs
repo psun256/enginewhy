@@ -1,7 +1,7 @@
 use crate::backend::{Backend, BackendPool};
 use crate::balancer::{Balancer, ConnectionInfo};
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc};
 
 #[derive(Debug)]
 pub struct SourceIPHash {
