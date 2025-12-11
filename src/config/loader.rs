@@ -8,6 +8,7 @@ use crate::backend::*;
 use crate::balancer::Balancer;
 use crate::balancer::adaptive_weight::AdaptiveWeightBalancer;
 use crate::balancer::round_robin::RoundRobinBalancer;
+use crate::balancer::ip_hashing::SourceIPHash;
 use crate::config::*;
 
 pub struct RoutingTable {
@@ -100,6 +101,7 @@ pub fn build_lb(
 
             let balancer: Box<dyn Balancer + Send> = match &rule.strategy {
                 LoadBalancerStrategy::RoundRobin => Box::new(RoundRobinBalancer::new(pool)),
+                LoadBalancerStrategy::SourceIPHash => Box::new(SourceIPHash::new(pool)),
                 LoadBalancerStrategy::Adaptive {
                     coefficients,
                     alpha,
@@ -119,7 +121,7 @@ pub fn build_lb(
     for table in listeners.values_mut() {
         table
             .entries
-            .sort_by(|(a, _), (b, _)| a.network_length().cmp(&b.network_length()));
+            .sort_by(|(a, _), (b, _)| b.network_length().cmp(&a.network_length()));
     }
 
     Ok((listeners, healths))

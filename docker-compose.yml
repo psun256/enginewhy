@@ -1,5 +1,4 @@
 services:
-  # two-arm load balancer  
   load-balancer:
     image: neoslhp/enginewhy-lb
     container_name: load-balancer
