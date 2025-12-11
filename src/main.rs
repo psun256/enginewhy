@@ -3,29 +3,35 @@ mod balancer;
 mod config;
 mod proxy;
 
-use std::collections::HashMap;
-use crate::balancer::{ConnectionInfo};
+use crate::backend::health::{start_healthcheck_listener, start_iperf_server, ServerMetrics};
+use crate::balancer::ConnectionInfo;
+use crate::config::loader::{build_lb, RoutingTable};
 use crate::proxy::tcp::proxy_tcp_connection;
+use anywho::Error;
+use std::collections::HashMap;
 use std::fs::File;
+use std::hash::Hash;
+use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
-use std::net::IpAddr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
-use anywho::Error;
+use tokio::io::AsyncBufReadExt;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
-use crate::backend::ServerMetrics;
-use crate::config::loader::{build_lb, RoutingTable};
-
-use notify::{Watcher, RecursiveMode, Event};
 use clap::Parser;
+use notify::{Event, RecursiveMode, Watcher};
+use std::cmp;
 
 static NEXT_CONN_ID: AtomicU64 = AtomicU64::new(1);
 
 struct ProgramState {
     tx_rt_map: HashMap<u16, mpsc::UnboundedSender<RoutingTable>>,
     healths: HashMap<IpAddr, Arc<RwLock<ServerMetrics>>>,
+    health_listener: Option<tokio::task::JoinHandle<()>>,
+    iperf_server: Option<tokio::task::JoinHandle<()>>,
+    health_listener_addr: Option<String>,
+    iperf_server_addr: Option<String>,
 }
 
 #[derive(Parser, Debug)]
@@ -49,6 +55,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let state = Arc::new(Mutex::new(ProgramState {
         tx_rt_map: HashMap::new(),
         healths: HashMap::new(),
+        health_listener: None,
+        iperf_server: None,
+        health_listener_addr: None,
+        iperf_server_addr: None,
     }));
 
     if let Err(e) = load_config(&args.config, state.clone()).await {
@@ -57,6 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config_path = args.config.clone();
     let state_clone = state.clone();
+
     tokio::spawn(async move {
         let (tx, mut rx) = mpsc::channel(1);
 
@@ -66,26 +77,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let _ = tx.blocking_send(());
                 }
             }
-        }).unwrap();
+        })
+        .unwrap();
 
-        watcher.watch(&config_path, RecursiveMode::NonRecursive).unwrap();
+        watcher
+            .watch(&config_path, RecursiveMode::NonRecursive)
+            .unwrap();
         println!("watching for changes to {:?}", config_path);
 
         while rx.recv().await.is_some() {
+            // for some reason, saving on certain text editors fires several events,
+            // and this causes us to reload a lot. try to flush some events, add a tiny delay
+            // to mitigate this
+
+            while rx.try_recv().is_ok() {}
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            while rx.try_recv().is_ok() {}
+
             if let Err(e) = load_config(&config_path, state_clone.clone()).await {
                 eprintln!("loading config failed: {}", e);
             }
         }
     });
 
-    loop { tokio::time::sleep(Duration::from_hours(1)).await; }
+    loop {
+        tokio::time::sleep(Duration::from_hours(1)).await;
+    }
 }
 
 async fn load_config(path: &PathBuf, state: Arc<Mutex<ProgramState>>) -> Result<(), Error> {
     let f = File::open(path)?;
     let app_config: config::AppConfig = match serde_saphyr::from_reader(f) {
         Ok(app_config) => app_config,
-        Err(e) => { eprintln!("error parsing config {}", e); return Ok(()); }
+        Err(e) => {
+            eprintln!("error parsing config {}", e);
+            return Ok(());
+        }
     };
 
     println!(
@@ -94,7 +121,7 @@ async fn load_config(path: &PathBuf, state: Arc<Mutex<ProgramState>>) -> Result<
         app_config.rules.len()
     );
 
-    let (mut listeners, health_monitors) = match build_lb(app_config) {
+    let (mut listeners, health_monitors) = match build_lb(&app_config) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("config has logical errors: {}", e);
@@ -103,7 +130,8 @@ async fn load_config(path: &PathBuf, state: Arc<Mutex<ProgramState>>) -> Result<
     };
     let mut prog_state = state.lock().unwrap();
 
-    let ports_to_remove: Vec<u16> = prog_state.tx_rt_map
+    let ports_to_remove: Vec<u16> = prog_state
+        .tx_rt_map
         .keys()
         .cloned()
         .filter(|port| !listeners.contains_key(port))
@@ -111,6 +139,38 @@ async fn load_config(path: &PathBuf, state: Arc<Mutex<ProgramState>>) -> Result<
 
     for port in ports_to_remove {
         prog_state.tx_rt_map.remove(&port);
+    }
+
+    if let Some(handle) = prog_state.health_listener.take() {
+        handle.abort();
+    }
+    let health_map: HashMap<IpAddr, Arc<RwLock<ServerMetrics>>> = health_monitors.clone();
+    let health_addr = app_config.healthcheck_addr.clone();
+    let health_addr_c = health_addr.clone();
+    let health_handle = tokio::spawn(async move {
+        if let Err(e) = start_healthcheck_listener(&health_addr, health_map).await {
+            eprintln!("health check listener failed: {}", e);
+        }
+    });
+    prog_state.health_listener = Some(health_handle);
+    prog_state.health_listener_addr = Some(health_addr_c);
+
+    // maybe restart iperf server
+    let iperf_addr = app_config.iperf_addr.clone();
+    if prog_state.iperf_server_addr.as_ref() != Some(&iperf_addr) {
+        if let Some(handle) = prog_state.iperf_server.take() {
+            handle.abort();
+        }
+
+        let iperf_addr_c = iperf_addr.clone();
+        let iperf_handle = tokio::spawn(async move {
+            if let Err(e) = start_iperf_server(iperf_addr.as_str()).await {
+                eprintln!("iperf server failed: {}", e);
+            }
+        });
+
+        prog_state.iperf_server = Some(iperf_handle);
+        prog_state.iperf_server_addr = Some(iperf_addr_c);
     }
 
     prog_state.healths = health_monitors;
@@ -133,7 +193,7 @@ async fn load_config(path: &PathBuf, state: Arc<Mutex<ProgramState>>) -> Result<
 async fn run_listener(
     port: u16,
     mut rx_rt: mpsc::UnboundedReceiver<RoutingTable>,
-    mut current_table: RoutingTable
+    mut current_table: RoutingTable,
 ) {
     let addr = format!("0.0.0.0:{}", port);
     println!("Starting tcp listener on {}", addr);

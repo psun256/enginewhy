@@ -1,7 +1,7 @@
 use crate::backend::{Backend, BackendPool};
 use crate::balancer::{Balancer, ConnectionInfo};
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct SourceIPHash {
@@ -30,8 +30,9 @@ impl Balancer for SourceIPHash {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::backend::health::ServerMetrics;
     use std::net::IpAddr;
-    use crate::backend::ServerMetrics;
+    use std::sync::RwLock;
 
     fn create_dummy_backends(count: usize) -> BackendPool {
         let mut backends = Vec::new();
