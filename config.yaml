@@ -1,37 +1,23 @@
-healthcheck_addr: "0.0.0.0:9000"
+healthcheck_addr: "0.0.0.0:8080"
 
-iperf_addr: "0.0.0.0:5201"
+iperf_addr: "0.0.0.0:5001"
 
 backends:
   - id: "srv-1"
-    ip: "10.0.1.1:8081"
+    ip: "192.67.67.2:8080"
   - id: "srv-2"
-    ip: "10.0.1.2:8082"
-  - id: "srv-3"
-    ip: "10.0.1.3:8083"
-  - id: "srv-4"
-    ip: "10.0.1.4:8084"
+    ip: "192.67.67.3:8080"
 
 clusters:
   main-api:
     - "srv-1"
     - "srv-2"
   priority-api:
-    - "srv-3"
-    - "srv-4"
+    - "srv-1"
 
 rules:
   - clients:
-      - "0.0.0.0/0:80"
-    targets:
-      - "main-api"
-    strategy:
-      type: "RoundRobin"
-
-  - clients:
-      - "10.0.0.0/24:80"
-      - "10.0.0.0/24:8080"
-      - "10.0.1.0/24:8080"
+      - "172.67.67.2/24:80"
     targets:
       - "main-api"
       - "priority-api"
