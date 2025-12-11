@@ -36,11 +36,9 @@ pub fn build_lb(
     let mut backends: HashMap<String, Arc<Backend>> = HashMap::new();
 
     for backend_cfg in &config.backends {
-        let ip: IpAddr = backend_cfg
-            .ip
-            .parse()
+        let addr: SocketAddr = backend_cfg.ip.parse()
             .map_err(|_| format!("bad ip: {}", backend_cfg.ip))?;
-        let addr = SocketAddr::new(ip, backend_cfg.port);
+        let ip = addr.ip();
 
         let health = healths
             .entry(ip)
