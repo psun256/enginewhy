@@ -1,37 +1,39 @@
-healthcheck_addr: "127.0.0.1:9000"
+healthcheck_addr: "0.0.0.0:9000"
 
-iperf_addr: "0.0.0.0:5200"
+iperf_addr: "0.0.0.0:5201"
 
 backends:
   - id: "srv-1"
-    ip: "127.0.0.1"
-    port: 8081
-
+    ip: "10.0.1.1:8081"
   - id: "srv-2"
-    ip: "127.0.0.1"
-    port: 8082
+    ip: "10.0.1.2:8082"
+  - id: "srv-3"
+    ip: "10.0.1.3:8083"
+  - id: "srv-4"
+    ip: "10.0.1.4:8084"
 
 clusters:
   main-api:
     - "srv-1"
     - "srv-2"
   priority-api:
-    - "srv-1"
+    - "srv-3"
+    - "srv-4"
 
 rules:
   - clients:
-      - "0.0.0.0/0:8888"
+      - "0.0.0.0/0:80"
     targets:
       - "main-api"
     strategy:
       type: "RoundRobin"
 
   - clients:
-      - "0.0.0.0/0:6767"
-      - "0.0.0.0/0:6969"
-    targets: # no issues with duplicate servers or clusters
-      - "priority-api"
-      - "priority-api"
+      - "10.0.0.0/24:80"
+      - "10.0.0.0/24:8080"
+      - "10.0.1.0/24:8080"
+    targets:
+      - "main-api"
       - "priority-api"
     strategy:
       type: "Adaptive"

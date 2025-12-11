@@ -44,7 +44,6 @@ pub struct AppConfig {
 pub struct BackendConfig {
     pub id: String,
     pub ip: String,
-    pub port: u16,
 }
 
 #[derive(Debug, Deserialize)]
