@@ -1,28 +1,11 @@
 pub mod health;
 
+use crate::backend::health::ServerMetrics;
 use core::fmt;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
-
-// Physical server health statistics, used for certain load balancing algorithms
-#[derive(Debug, Default)]
-pub struct ServerMetrics {
-    pub cpu: f64,
-    pub mem: f64,
-    pub net: f64,
-    pub io: f64,
-}
-
-impl ServerMetrics {
-    pub fn update(&mut self, cpu: f64, mem: f64, net: f64, io: f64) {
-        self.cpu = cpu;
-        self.mem = mem;
-        self.net = net;
-        self.io = io;
-    }
-}
 
 // A possible endpoint for a proxied connection.
 // Note that multiple may live on the same server, hence the Arc<RwLock<ServerMetric>>

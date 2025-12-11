@@ -1,3 +1,7 @@
+healthcheck_addr: "127.0.0.1:9000"
+
+iperf_addr: "0.0.0.0:5200"
+
 backends:
   - id: "srv-1"
     ip: "127.0.0.1"
@@ -16,7 +20,7 @@ clusters:
 
 rules:
   - clients:
-      - "0.0.0.0/0:8080"
+      - "0.0.0.0/0:8888"
     targets:
       - "main-api"
     strategy:
@@ -24,6 +28,7 @@ rules:
 
   - clients:
       - "0.0.0.0/0:6767"
+      - "0.0.0.0/0:6969"
     targets: # no issues with duplicate servers or clusters
       - "priority-api"
       - "priority-api"
