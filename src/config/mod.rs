@@ -57,5 +57,6 @@ pub struct RuleConfig {
 #[serde(tag = "type")]
 pub enum LoadBalancerStrategy {
     RoundRobin,
+    SourceIPHash,
     Adaptive { coefficients: [f64; 4], alpha: f64 },
 }
