@@ -1,0 +1,110 @@
+services:
+  load-balancer:
+    image: enginewhy
+    container_name: load-balancer
+    tty: true
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    volumes:
+      - ./config.yaml:/enginewhy/config.yaml
+    networks:
+      net_1:
+        ipv4_address: 10.0.1.10
+      net_2:
+        ipv4_address: 10.0.0.10
+      net_3:
+        ipv4_address: 10.0.2.10
+
+  srv-1:
+    image: nicolaka/netshoot
+    container_name: srv-1
+    tty: true
+    command: ["python3", "-m", "http.server", "8081", "--directory", "/root/www"]
+    networks:
+      net_1:
+        ipv4_address: 10.0.1.11
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./srv1:/root/www
+    cap_add: [ NET_ADMIN ]
+
+  srv-2:
+    image: nicolaka/netshoot
+    container_name: srv-2
+    tty: true
+    command: ["python3", "-m", "http.server", "8082", "--directory", "/root/www"]
+    networks:
+      net_1:
+        ipv4_address: 10.0.1.12
+    ports:
+      - "8082:8082"
+    volumes:
+      - ./srv2:/root/www
+    cap_add: [ NET_ADMIN ]
+
+  srv-3:
+    image: nicolaka/netshoot
+    container_name: srv-3
+    tty: true
+    command: ["python3", "-m", "http.server", "8083", "--directory", "/root/www"]
+    networks:
+      net_1:
+        ipv4_address: 10.0.1.13
+    ports:
+      - "8083:8083"
+    volumes:
+      - ./srv3:/root/www
+    cap_add: [ NET_ADMIN ]
+
+  srv-4:
+    image: nicolaka/netshoot
+    container_name: srv-4
+    tty: true
+    command: ["python3", "-m", "http.server", "8084", "--directory", "/root/www"]
+    networks:
+      net_1:
+        ipv4_address: 10.0.1.14
+    ports:
+      - "8084:8084"
+    volumes:
+      - ./srv4:/root/www
+    cap_add: [ NET_ADMIN ]
+
+  client-net2:
+    image: nicolaka/netshoot
+    container_name: client-net2
+    tty: true
+    networks:
+      net_2:
+        ipv4_address: 10.0.0.11
+    cap_add: [ NET_ADMIN ]
+
+  client-net3:
+    image: nicolaka/netshoot
+    container_name: client-net3
+    tty: true
+    networks:
+      net_3:
+        ipv4_address: 10.0.2.11
+    cap_add: [ NET_ADMIN ]
+
+networks:
+  net_1:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.1.0/24
+
+  net_2:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.0.0/24
+
+  net_3:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.2.0/24
