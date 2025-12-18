@@ -7,8 +7,8 @@ use crate::backend::health::*;
 use crate::backend::*;
 use crate::balancer::Balancer;
 use crate::balancer::adaptive_weight::AdaptiveWeightBalancer;
-use crate::balancer::round_robin::RoundRobinBalancer;
 use crate::balancer::ip_hashing::SourceIPHash;
+use crate::balancer::round_robin::RoundRobinBalancer;
 use crate::config::*;
 
 pub struct RoutingTable {
@@ -37,7 +37,9 @@ pub fn build_lb(
     let mut backends: HashMap<String, Arc<Backend>> = HashMap::new();
 
     for backend_cfg in &config.backends {
-        let addr: SocketAddr = backend_cfg.ip.parse()
+        let addr: SocketAddr = backend_cfg
+            .ip
+            .parse()
             .map_err(|_| format!("bad ip: {}", backend_cfg.ip))?;
         let ip = addr.ip();
 
@@ -87,7 +89,7 @@ pub fn build_lb(
         let mut port_groups: HashMap<u16, Vec<IpCidr>> = HashMap::new();
 
         for client_def in &rule.clients {
-            let (cidr, port) = parse_client(&client_def)?;
+            let (cidr, port) = parse_client(client_def)?;
             port_groups.entry(port).or_default().push(cidr);
         }
 

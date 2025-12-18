@@ -19,7 +19,7 @@ impl RoundRobinBalancer {
 }
 
 impl Balancer for RoundRobinBalancer {
-    fn choose_backend(&mut self, ctx: ConnectionInfo) -> Option<Arc<Backend>> {
+    fn choose_backend(&mut self, _ctx: ConnectionInfo) -> Option<Arc<Backend>> {
         let backends = self.pool.backends.clone();
         if backends.is_empty() {
             return None;

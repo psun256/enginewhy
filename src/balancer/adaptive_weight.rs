@@ -1,11 +1,10 @@
-use crate::backend::{Backend, BackendPool};
 use crate::backend::health::ServerMetrics;
+use crate::backend::{Backend, BackendPool};
 use crate::balancer::{Balancer, ConnectionInfo};
 use rand::prelude::*;
 use rand::rngs::SmallRng;
 use std::fmt::Debug;
-use std::fs::Metadata;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 #[derive(Debug)]
 struct AdaptiveNode {
@@ -49,7 +48,7 @@ impl AdaptiveWeightBalancer {
 }
 
 impl Balancer for AdaptiveWeightBalancer {
-    fn choose_backend(&mut self, ctx: ConnectionInfo) -> Option<Arc<Backend>> {
+    fn choose_backend(&mut self, _ctx: ConnectionInfo) -> Option<Arc<Backend>> {
         if self.pool.is_empty() {
             return None;
         }
@@ -72,7 +71,7 @@ impl Balancer for AdaptiveWeightBalancer {
 
         let safe_w_sum = w_sum.max(1e-12);
         let threshold = self.alpha * (r_sum / safe_w_sum);
-        
+
         for idx in 0..self.pool.len() {
             let node = &self.pool[idx];
 
@@ -148,6 +147,7 @@ mod tests {
     use super::*;
     use crate::backend::Backend;
     use std::net::SocketAddr;
+    use std::sync::RwLock;
 
     fn backend_factory(id: &str, ip: &str, port: u16) -> Arc<Backend> {
         Arc::new(Backend::new(

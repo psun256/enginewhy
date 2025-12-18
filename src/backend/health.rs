@@ -1,10 +1,10 @@
+use rperf3::{Config, Server};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, RwLock};
-use serde_json::Value;
-use rperf3::{Config, Server};
-use tokio::net::{TcpListener, TcpSocket, TcpStream};
 use tokio::io::AsyncBufReadExt;
+use tokio::net::{TcpSocket, TcpStream};
 
 // Physical server health statistics, used for certain load balancing algorithms
 #[derive(Debug, Default)]
@@ -47,14 +47,14 @@ pub async fn start_healthcheck_listener(
 
     let listener = listener.ok_or_else(|| {
         eprintln!("health listener could not bind to port");
-        std::io::Error::new(std::io::ErrorKind::Other, "health listener failed")
+        std::io::Error::other("health listener failed")
     })?;
 
     println!("healthcheck server listening on {}", addr);
     loop {
-        let (stream, remote_addr) = match listener.accept().await {
+        let (stream, _remote_addr) = match listener.accept().await {
             Ok(v) => v,
-            Err(e) => {
+            Err(_e) => {
                 continue;
             }
         };

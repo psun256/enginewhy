@@ -3,25 +3,22 @@ mod balancer;
 mod config;
 mod proxy;
 
-use crate::backend::health::{start_healthcheck_listener, start_iperf_server, ServerMetrics};
+use crate::backend::health::{ServerMetrics, start_healthcheck_listener, start_iperf_server};
 use crate::balancer::ConnectionInfo;
-use crate::config::loader::{build_lb, RoutingTable};
+use crate::config::loader::{RoutingTable, build_lb};
 use crate::proxy::tcp::proxy_tcp_connection;
 use anywho::Error;
+use clap::Parser;
+use notify::{Event, RecursiveMode, Watcher};
 use std::collections::HashMap;
 use std::fs::File;
-use std::hash::Hash;
-use std::net::{IpAddr, SocketAddr};
+use std::net::IpAddr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
-use tokio::io::AsyncBufReadExt;
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
-use clap::Parser;
-use notify::{Event, RecursiveMode, Watcher};
-use std::cmp;
 
 static NEXT_CONN_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -72,10 +69,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let (tx, mut rx) = mpsc::channel(1);
 
         let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
-            if let Ok(event) = res {
-                if event.kind.is_modify() {
-                    let _ = tx.blocking_send(());
-                }
+            if let Ok(event) = res
+                && event.kind.is_modify()
+            {
+                let _ = tx.blocking_send(());
             }
         })
         .unwrap();
