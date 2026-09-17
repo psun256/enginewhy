@@ -213,6 +213,7 @@ async fn run_listener(
             accept_result = listener.accept() => {
                 match accept_result {
                     Ok((socket, remote_addr)) => {
+                        let _ = socket.set_nodelay(true);
                         let remote_ip = remote_addr.ip();
                         let conn_id = NEXT_CONN_ID.fetch_add(1, Ordering::Relaxed);
 

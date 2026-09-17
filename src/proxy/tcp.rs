@@ -10,17 +10,19 @@ pub async fn proxy_tcp_connection(
     mut client_stream: TcpStream,
     backend: Arc<Backend>,
 ) -> Result<(), Error> {
+    let _ = client_stream.set_nodelay(true);
     let client_addr = client_stream.peer_addr()?;
-
-    let mut ctx = ConnectionContext::new(connection_id, client_addr, backend.clone());
 
     #[cfg(debug_assertions)]
     println!(
         "info: conn_id={} connecting to {}",
-        connection_id, ctx.backend.id
+        connection_id, backend.id
     );
 
     let mut backend_stream = TcpStream::connect(&backend.address).await?;
+    let _ = backend_stream.set_nodelay(true);
+
+    let mut ctx = ConnectionContext::new(connection_id, client_addr, backend);
 
     let (tx, rx) = io::copy_bidirectional(&mut client_stream, &mut backend_stream).await?;
 

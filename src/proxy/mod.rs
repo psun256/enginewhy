@@ -5,6 +5,7 @@ use std::time::Instant;
 
 pub mod tcp;
 
+#[allow(dead_code)]
 pub struct ConnectionContext {
     pub id: u64,
     pub client_addr: SocketAddr,
@@ -30,15 +31,17 @@ impl ConnectionContext {
 impl Drop for ConnectionContext {
     fn drop(&mut self) {
         self.backend.dec_connections();
-        let duration = self.start_time.elapsed();
-
-        println!(
-            "info: conn_id={} closed. client={} backend={} bytes={} duration={:.2?}",
-            self.id,
-            self.client_addr,
-            self.backend.address,
-            self.bytes_transferred,
-            duration.as_secs_f64()
-        );
+        #[cfg(debug_assertions)]
+        {
+            let duration = self.start_time.elapsed();
+            println!(
+                "info: conn_id={} closed. client={} backend={} bytes={} duration={:.2?}",
+                self.id,
+                self.client_addr,
+                self.backend.address,
+                self.bytes_transferred,
+                duration.as_secs_f64()
+            );
+        }
     }
 }

@@ -36,6 +36,7 @@ impl Backend {
     // enough not to behave poorly, so SeqCst is probably overkill.
     pub fn inc_connections(&self) {
         self.active_connections.fetch_add(1, Ordering::Relaxed);
+        #[cfg(debug_assertions)]
         println!(
             "{} has {} connections open",
             self.id,
@@ -45,6 +46,7 @@ impl Backend {
 
     pub fn dec_connections(&self) {
         self.active_connections.fetch_sub(1, Ordering::Relaxed);
+        #[cfg(debug_assertions)]
         println!(
             "{} has {} connections open",
             self.id,
